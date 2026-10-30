@@ -170,6 +170,47 @@ function tagOf(r){
   }
   return 'none';
 }
+
+/* ---------- 電腦估 Fair ---------- */
+function formPoints(formStr){
+  var w=[1,0.85,0.7,0.55,0.4,0.3], pts=[10,7,5,3,2,1], total=0;
+  (formStr||'').split('/').slice(0,6).forEach(function(s,i){
+    var p=parseInt(s,10);
+    if(p>=1&&p<=6) total+=pts[p-1]*w[i];
+    else if(p>6) total+=0.5*w[i];
+  });
+  return total;
+}
+function cdBonus(runner, track, dist){
+  var h=S.horses[runner.name];
+  if(!h||!h.form||!h.form.length||!dist) return {bonus:0,note:''};
+  var wins=0, places=0, n=0;
+  h.form.slice(0,12).forEach(function(f){
+    var fd=parseInt(f[2],10);
+    if(f[1]===track && Math.abs(fd-dist)<=100){
+      n++;
+      var m=/^(\d+)/.exec(f[4]||'');
+      if(m){ var p=parseInt(m[1],10); if(p===1) wins++; if(p<=3) places++; }
+    }
+  });
+  return {bonus:Math.min(12, wins*4+(places-wins)*1.5), note:n?('同程'+n+'戰'+wins+'冠'):''};
+}
+function estimateFair(rc, track){
+  var distM=/(\d+)\s*米/.exec(rc.info||''), dist=distM?parseInt(distM[1],10):0;
+  var T=14; /* softmax 溫度：經驗值，未經回測校準 */
+  var items=rc.runners.map(function(r){
+    var fp=formPoints(r.form), cd=cdBonus(r, track, dist);
+    return {r:r, score:(r.rating||50)+fp+cd.bonus, fp:fp, cd:cd};
+  });
+  var mx=Math.max.apply(null, items.map(function(x){return x.score;}));
+  var exps=items.map(function(x){return Math.exp((x.score-mx)/T);});
+  var sum=exps.reduce(function(a,b){return a+b;},0);
+  items.forEach(function(x,i){
+    var p=exps[i]/sum;
+    x.r.fairEst=Math.max(1.1, Math.round(10/p)/10);
+    x.r.fairNote='評分 '+(x.r.rating||'—')+'・近績 '+Math.round(x.fp)+' 分'+(x.cd.note?'・'+x.cd.note:'');
+  });
+}
 function tagHtml(t){
   if(t==='value') return '<span class="badge value">有值</span>';
   if(t==='hot') return '<span class="badge hot">偏熱</span>';
@@ -198,12 +239,18 @@ function renderRace(){
   if(!rc){ body.innerHTML='<div class="empty">呢個賽期未有場次。</div>'; return; }
   var rows = rc.runners.map(function(r){
     var t=tagOf(r);
+    var fairCell = r.fair
+      ? esc(String(r.fair))+(r.fairAuto?' <span class="auto">估</span>':'')
+      : '—';
     return '<tr><td class="num">'+r.gate+'</td><td class="num">'+r.num+'</td>'+
-      '<td><span class="horse">'+esc(r.name)+'</span><br><span class="sub">評分 '+r.rating+'・近績 '+esc(r.form)+'</span></td>'+
-      '<td class="num">'+(r.odds||'—')+'</td><td class="num">'+(r.fair||'—')+'</td>'+
+      '<td><span class="horse" data-horse="'+esc(r.name)+'">'+esc(r.name)+'</span><br><span class="sub">評分 '+r.rating+'・近績 '+esc(r.form)+'</span></td>'+
+      '<td class="num editable" data-f="odds" data-n="'+r.num+'">'+(r.odds||'—')+'</td>'+
+      '<td class="num editable" data-f="fair" data-n="'+r.num+'"'+(r.fairNote?' title="'+esc(r.fairNote)+'"':'')+'>'+fairCell+'</td>'+
       '<td>'+tagHtml(t)+'</td><td><span class="badge '+(r.conf==='高'?'high':'none')+'">'+esc(r.conf)+'</span></td></tr>';
   }).join('');
   body.innerHTML='<p class="raceinfo">'+esc(rc.info||rc.label)+'</p>'+
+    '<div class="btnrow"><button class="btn" id="btnEstFair">電腦估算 Fair</button>'+
+    '<span class="sub">按評分・近績・同程往績估算，僅供起步參考；撳數字可手改</span></div>'+
     '<div class="scrollx"><table class="tbl"><thead><tr><th>檔</th><th>馬號</th><th>馬匹</th><th>賠率</th><th>Fair</th><th>Value</th><th>信心</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     pickHtml(rc);
   document.querySelectorAll('#meetPills .pill').forEach(function(b){
@@ -212,6 +259,48 @@ function renderRace(){
   document.querySelectorAll('#racePills .pill').forEach(function(b){
     b.onclick=function(){ S.sel.race=b.getAttribute('data-race'); save(); renderRace(); renderValue(); };
   });
+  /* 撳數字手改賠率 / Fair */
+  document.querySelectorAll('#raceBody .editable').forEach(function(c){
+    c.onclick=function(){
+      var f=c.getAttribute('data-f'), num=parseInt(c.getAttribute('data-n'),10);
+      var rc2=curRace(); if(!rc2) return;
+      var ru=null;
+      rc2.runners.forEach(function(x){ if(x.num===num) ru=x; });
+      if(!ru) return;
+      var v=prompt((f==='odds'?'市場賠率':'Fair（合理賠率）')+' — '+ru.name, (f==='odds'?ru.odds:ru.fair)||'');
+      if(v===null) return;
+      var nv=parseFloat(v);
+      if(f==='odds'){ ru.odds=nv>0?nv:0; }
+      else { ru.fair=nv>0?nv:0; ru.fairAuto=false; }
+      save(); renderRace(); renderValue();
+    };
+  });
+  /* 撳馬名睇估算理據 */
+  document.querySelectorAll('#raceBody .horse').forEach(function(h){
+    h.onclick=function(){
+      var nm=h.getAttribute('data-horse'), rc2=curRace(); if(!rc2) return;
+      var ru=null;
+      rc2.runners.forEach(function(x){ if(x.name===nm) ru=x; });
+      if(!ru) return;
+      var msg=ru.name+'（'+ru.num+'號）\n評分 '+ru.rating+'・近績 '+ru.form;
+      if(ru.fairNote) msg+='\n電腦估算：'+ru.fairNote+' → fair '+ru.fairEst;
+      if(ru.fair&&!ru.fairAuto) msg+='\nFair（手填）：'+ru.fair;
+      alert(msg);
+    };
+  });
+  /* 電腦估算 Fair */
+  var eb=document.getElementById('btnEstFair');
+  if(eb) eb.onclick=function(){
+    var mm=curMeet(), rc2=curRace(); if(!rc2) return;
+    var track=((mm&&mm.chip)||'').split(' ')[1]||'';
+    estimateFair(rc2, track);
+    var n=0;
+    rc2.runners.forEach(function(r){
+      if(!r.fair&&r.fairEst){ r.fair=r.fairEst; r.fairAuto=true; n++; }
+    });
+    save(); renderRace(); renderValue();
+    alert('已為 '+n+' 匹估算 Fair（有「估」標記）。\n開賽前填返市場賠率，就會計出 value。\n估算只係起點，你識嘅嘢（晨操、換人意圖）電腦唔識——隨時撳數字手改。');
+  };
 }
 function pickHtml(rc){
   var vals = rc.runners.filter(function(r){return tagOf(r)==='value';})
@@ -236,7 +325,7 @@ function renderHorse(){
   var box=document.getElementById('horseBody');
   var h=S.horses[S.sel.horse];
   if(!h){ box.innerHTML='<div class="empty">未有馬匹數據。<br>匯入馬匹往績 CSV，或用樣本數據試下。</div>'; return; }
-  var wins=h.form.filter(function(f){return /^1\//.test(f[4]);}).length;
+  var wins=h.form.filter(function(f){return parseInt(f[4],10)===1;}).length;
   var stats=[['<div class="v">'+h.form.length+'戰</div><div class="k">往績 '+wins+'冠</div>'],
              ['<div class="v">'+(h.speed||'—')+'分</div><div class="k">速度評分</div>']];
   var statHtml=stats.map(function(s){return '<div class="stat">'+s[0]+'</div>';}).join('');
@@ -259,12 +348,13 @@ function renderValue(){
     .sort(function(a,b){return edgePct(b)-edgePct(a);});
   if(!vals.length){ box.innerHTML='<div class="empty">呢場暫時冇「有值」嘅馬。<br>有 value 先買——冇就唔買。</div>'; return; }
   box.innerHTML=vals.map(function(r){
-    var e=edgePct(r), kelly=((0.22*r.odds-1)/(r.odds-1))*100,
+    var e=edgePct(r), p=r.fair>0?1/r.fair:0.22,
+        kelly=((p*r.odds-1)/(r.odds-1))*100,
         stake=kelly>0?Math.round(S.bankroll*kelly/100*0.5):0;
     return '<div class="vcard"><div class="row"><span class="nm">'+esc(rc.label)+'・'+esc(r.name)+'</span><span class="badge value">有值 +'+e.toFixed(0)+'%</span></div>'+
       '<div class="meta">檔位 '+r.gate+'・評分 '+r.rating+'・信心'+esc(r.conf)+'</div>'+
       '<div class="vgrid"><div>市場賠率<b>'+r.odds+'</b></div><div>Fair odds<b>'+r.fair+'</b></div><div>錯價<b>+'+e.toFixed(0)+'%</b></div><div class="pos">半Kelly 建議<b>'+money(stake)+'</b></div></div></div>';
-  }).join('')+'<div class="note">Kelly 建議用預設勝率 22% 估算，正式落注前請按自己判斷調整。資金設定喺「記賬・資金」分頁。</div>';
+  }).join('')+'<div class="note">Kelly 用 Fair 隱含勝率（1÷fair）估算：即係假設你嘅 fair 啱，呢個注碼長期唔會清袋。正式落注前請按自己判斷調整。資金設定喺「記賬・資金」分頁。</div>';
 }
 
 /* ---------- TAB: 記賬 ---------- */

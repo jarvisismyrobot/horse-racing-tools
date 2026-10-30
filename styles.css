@@ -86,3 +86,6 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:14px 4px 2px}
 .empty{text-align:center;color:var(--muted);padding:26px 10px;font-size:13px}
 input[type=file]{display:none}
 @media (max-width:560px){.tbl{font-size:11.5px}.formgrid{grid-template-columns:1fr 1fr}}
+.editable{cursor:pointer;border-bottom:1px dashed #a33}
+.horse{cursor:pointer}
+.auto{font-size:10px;color:#fff;background:#8a8f98;border-radius:8px;padding:1px 6px;margin-left:2px;vertical-align:1px}
