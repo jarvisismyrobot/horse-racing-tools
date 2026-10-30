@@ -144,6 +144,20 @@ function importRaceCSV(text){
   return added;
 }
 
+/* ---------- 更新賠率 ---------- */
+function parseOddsCSV(text){
+  var rows=parseCSV(text), out=[];
+  if(!rows.length) return out;
+  var h=rows[0].map(function(x){return x.trim();});
+  var cRace=h.indexOf('場次'), cNum=h.indexOf('馬號'), cOdds=h.indexOf('獨贏');
+  if(cRace<0||cNum<0||cOdds<0) throw new Error('賠率 CSV 缺少欄位（場次,馬號,獨贏）');
+  rows.slice(1).forEach(function(r){
+    var num=parseInt(r[cNum],10), odds=parseFloat(r[cOdds]);
+    if(r[cRace]&&num>0&&odds>0) out.push({race:r[cRace].trim(), num:num, odds:odds});
+  });
+  return out;
+}
+
 /* 匯入馬匹往績：馬名,基本資料,騎練組合,速度評分,日期,馬場,途程,場地,名次,時間,負磅,騎師 */
 function importHorseCSV(text){
   var rows=parseCSV(text);
@@ -575,6 +589,38 @@ function bind(){
     csvDownload('horse-template.csv','馬名,基本資料,騎練組合,速度評分,日期,馬場,途程,場地,名次,時間,負磅,騎師\n電訊飛彈,5歲・澳洲自購馬・評分 52,練馬師 蔡約翰／騎師 潘頓,98,10-28,沙田,1200,好地,1/12,1:09.2,126,潘頓\n');
   };
 
+  /* 更新賠率：由 manifest 攞 odds CSV，一次填晒成個 meeting 嘅獨贏賠率 */
+  document.getElementById('btnOdds').onclick=function(){
+    var m=curMeet();
+    var st=document.getElementById('oddsStatus');
+    if(!m){ st.textContent='未有賽事數據，先撳「從 GitHub 更新數據」'; return; }
+    st.textContent='讀緊賠率…';
+    fetch('data/manifest.json').then(function(r){
+      if(!r.ok) throw new Error('no manifest');
+      return r.json();
+    }).then(function(mf){
+      if(!mf.odds) throw new Error('no odds');
+      return fetch('data/'+mf.odds).then(function(r){
+        if(!r.ok) throw new Error('no odds file');
+        return r.text();
+      }).then(function(t){ return {t:t, mf:mf}; });
+    }).then(function(x){
+      var list=parseOddsCSV(x.t), n=0;
+      m.races.forEach(function(rc){
+        list.forEach(function(o){
+          if(o.race===rc.label){
+            rc.runners.forEach(function(r){ if(r.num===o.num&&o.odds>0){ r.odds=o.odds; n++; } });
+          }
+        });
+      });
+      S.oddsUpdated=x.mf.oddsUpdated||'';
+      save(); renderRace(); renderValue();
+      st.textContent='賠率已更新：'+n+' 匹'+(S.oddsUpdated?'（'+S.oddsUpdated+'）':'');
+    }).catch(function(){
+      st.textContent='未有賠率數據（開賽日先有）';
+    });
+  };
+
   var cs=document.getElementById('btnClearSample');
   if(cs) cs.onclick=function(){
     if(!confirm('清除所有樣本數據？（你自己匯入／記錄的數據會保留）')) return;
@@ -604,6 +650,8 @@ function renderAll(){
   var hs=hasSample();
   document.getElementById('sampleTag').style.display=hs?'':'none';
   document.getElementById('sampleCtl').style.display=hs?'':'none';
+  var os=document.getElementById('oddsStatus');
+  if(os) os.textContent=S.oddsUpdated?('上次賠率更新：'+S.oddsUpdated):'';
   document.getElementById('kBank').value=S.bankroll;
   renderRace(); renderHorse(); renderValue(); renderMoney();
 }
