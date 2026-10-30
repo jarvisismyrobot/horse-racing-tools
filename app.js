@@ -388,7 +388,35 @@ function bind(){
         if(!r.ok) throw new Error('no racecard');
         return r.text();
       }).then(function(t){
+        /* 備份用戶手填值（按 場次|馬號），換新 meeting 後還原 */
+        var userVals={};
+        var oldM=S.meetings.find(function(x){return x.chip===m.meeting;});
+        if(oldM) oldM.races.forEach(function(rc){
+          rc.runners.forEach(function(ru){
+            userVals[rc.label+'|'+ru.num]={odds:ru.odds,fair:ru.fair,conf:ru.conf,speed:ru.speed};
+          });
+        });
+        /* 成個 meeting 換新：場次順序啱（R1→R10），舊/sample 馬唔殘留 */
+        S.meetings=S.meetings.filter(function(x){return x.chip!==m.meeting;});
         var n1=importRaceCSV(t);
+        var newM=S.meetings.find(function(x){return x.chip===m.meeting;});
+        if(newM){
+          newM.races.forEach(function(rc){
+            rc.runners.forEach(function(ru){
+              var uv=userVals[rc.label+'|'+ru.num];
+              if(uv){
+                if(!ru.odds&&uv.odds) ru.odds=uv.odds;
+                if(!ru.fair&&uv.fair) ru.fair=uv.fair;
+                if(uv.conf&&uv.conf!=='中') ru.conf=uv.conf;
+                if(!ru.speed&&uv.speed) ru.speed=uv.speed;
+              }
+            });
+          });
+          /* 選中新 meeting 第一場 */
+          S.sel.meet=newM.id;
+          if(newM.races.length) S.sel.race=newM.races[0].id;
+        }
+        save();
         return fetch('data/'+m.horses).then(function(r){
           if(!r.ok) throw new Error('no horses');
           return r.text();
