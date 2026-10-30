@@ -389,11 +389,12 @@ function bind(){
         return r.text();
       }).then(function(t){
         /* 備份用戶手填值（按 場次|馬號），換新 meeting 後還原 */
-        var userVals={};
+        var userVals={}, oldNames={};
         var oldM=S.meetings.find(function(x){return x.chip===m.meeting;});
         if(oldM) oldM.races.forEach(function(rc){
           rc.runners.forEach(function(ru){
             userVals[rc.label+'|'+ru.num]={odds:ru.odds,fair:ru.fair,conf:ru.conf,speed:ru.speed};
+            oldNames[ru.name]=true;
           });
         });
         /* 成個 meeting 換新：場次順序啱（R1→R10），舊/sample 馬唔殘留 */
@@ -422,6 +423,16 @@ function bind(){
           return r.text();
         }).then(function(t2){
           var n2=importHorseCSV(t2);
+          /* 清走舊 meeting 獨有嘅馬（例如上一版英文馬名、sample 馬） */
+          var newNames={};
+          parseCSV(t2).slice(1).forEach(function(row){
+            if(row[0]&&row[0].trim()) newNames[row[0].trim()]=true;
+          });
+          Object.keys(S.horses).forEach(function(nm){
+            if(oldNames[nm]&&!newNames[nm]) delete S.horses[nm];
+          });
+          if(S.sel.horse&&!S.horses[S.sel.horse]) S.sel.horse='';
+          save();
           return {n1:n1,n2:n2,meeting:m.meeting,updated:m.updated};
         });
       });
