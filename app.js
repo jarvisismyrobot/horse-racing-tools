@@ -322,7 +322,13 @@ function renderHorse(){
   document.getElementById('horseChips').innerHTML = names.map(function(n){
     return '<button class="chip'+(S.sel.horse===n?' active':'')+'" data-h="'+esc(n)+'">'+esc(n)+'</button>';
   }).join('') || '<span class="sub">未有馬匹數據</span>';
+  /* chips 綁定要喺 early return 之前，否則清馬後會撳唔到 */
+  document.querySelectorAll('#horseChips .chip').forEach(function(b){
+    b.onclick=function(){ S.sel.horse=b.getAttribute('data-h'); save(); renderHorse(); };
+  });
   var box=document.getElementById('horseBody');
+  /* 未選馬但有數據：自動選第一隻 */
+  if(!S.sel.horse&&names.length){ S.sel.horse=names[0]; save(); }
   var h=S.horses[S.sel.horse];
   if(!h){ box.innerHTML='<div class="empty">未有馬匹數據。<br>匯入馬匹往績 CSV，或用樣本數據試下。</div>'; return; }
   var wins=h.form.filter(function(f){return parseInt(f[4],10)===1;}).length;
@@ -335,9 +341,6 @@ function renderHorse(){
   box.innerHTML='<div class="card"><div class="meet"><h3>'+esc(h.name)+'</h3><span>'+esc(h.info||'')+'</span></div>'+
     '<p class="racesub">'+esc(h.tj||'')+'</p><div class="grid3" style="grid-template-columns:repeat(2,1fr)">'+statHtml+'</div></div>'+
     '<div class="card scrollx" style="padding:6px 10px"><table class="tbl"><thead><tr><th>日期</th><th>馬場</th><th>途程</th><th>場地</th><th>名次</th><th>時間</th><th>負磅</th><th>騎師</th></tr></thead><tbody>'+form+'</tbody></table></div>';
-  document.querySelectorAll('#horseChips .chip').forEach(function(b){
-    b.onclick=function(){ S.sel.horse=b.getAttribute('data-h'); save(); renderHorse(); };
-  });
 }
 
 /* ---------- TAB: Value ---------- */
