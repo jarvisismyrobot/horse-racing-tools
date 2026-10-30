@@ -109,11 +109,24 @@ function importRaceCSV(text){
     if(!m){ m={id:uid(), chip:chip, title:g(cTitle)||chip, sub:g(cSub)||'', races:[]}; S.meetings.push(m); }
     var rc=m.races.find(function(x){return x.label===raceLabel;});
     if(!rc){ rc={id:uid(), label:raceLabel, info:g(cInfo)||'', runners:[]}; m.races.push(rc); }
-    rc.runners.push({
-      gate:parseInt(g(cGate))||0, num:parseInt(g(cNum))||0, name:name,
+    var num=parseInt(g(cNum))||0;
+    var key=num+'|'+name;
+    var ex=rc.runners.find(function(x){return (x.num+'|'+x.name)===key;});
+    var rec={
+      gate:parseInt(g(cGate))||0, num:num, name:name,
       rating:parseFloat(g(cRating))||0, speed:parseFloat(g(cSpeed))||0,
       form:g(cForm), odds:parseFloat(g(cOdds))||0, fair:parseFloat(g(cFair))||0, conf:g(cConf)||'中'
-    });
+    };
+    if(ex){
+      /* 已存在：更新官方數據；CSV 留空的欄位保留用戶手填值 */
+      ex.gate=rec.gate; ex.rating=rec.rating; ex.form=rec.form;
+      if(g(cSpeed)!=='') ex.speed=rec.speed;
+      if(g(cOdds)!=='') ex.odds=rec.odds;
+      if(g(cFair)!=='') ex.fair=rec.fair;
+      if(g(cConf)!=='') ex.conf=rec.conf;
+    }else{
+      rc.runners.push(rec);
+    }
     added++;
   }
   if(!S.sel.meet && S.meetings.length){ S.sel.meet=S.meetings[0].id; }
@@ -139,7 +152,10 @@ function importHorseCSV(text){
     if(g(cInfo)) hz.info=g(cInfo);
     if(g(cTj)) hz.tj=g(cTj);
     if(g(cSpeed)) hz.speed=parseFloat(g(cSpeed))||hz.speed;
-    if(g(cDate)) hz.form.push([g(cDate),g(cTrack),g(cDist),g(cGoing),g(cPos),g(cTime),g(cWt),g(cJoc)]);
+    /* 往績列去重：同馬同日同途程同馬場只保留一列 */
+    var fkey=g(cDate)+'|'+g(cDist)+'|'+g(cTrack);
+    var dup=hz.form.some(function(f){return (f[0]+'|'+f[2]+'|'+f[1])===fkey;});
+    if(g(cDate) && !dup) hz.form.push([g(cDate),g(cTrack),g(cDist),g(cGoing),g(cPos),g(cTime),g(cWt),g(cJoc)]);
     S.horses[name]=hz; n++;
   }
   save();
@@ -361,8 +377,36 @@ function bind(){
     rd.readAsText(f); e.target.value='';
   });
 
-  document.getElementById('btnRaceCsv').onclick=function(){ document.getElementById('fileRaceCsv').click(); };
-  document.getElementById('fileRaceCsv').addEventListener('change', function(e){
+  document.getElementById('btnCloudUpdate').onclick=function(){
+    var st=document.getElementById('cloudStatus');
+    st.textContent='更新緊…';
+    fetch('data/manifest.json').then(function(r){
+      if(!r.ok) throw new Error('no manifest');
+      return r.json();
+    }).then(function(m){
+      return fetch('data/'+m.racecard).then(function(r){
+        if(!r.ok) throw new Error('no racecard');
+        return r.text();
+      }).then(function(t){
+        var n1=importRaceCSV(t);
+        return fetch('data/'+m.horses).then(function(r){
+          if(!r.ok) throw new Error('no horses');
+          return r.text();
+        }).then(function(t2){
+          var n2=importHorseCSV(t2);
+          return {n1:n1,n2:n2,meeting:m.meeting,updated:m.updated};
+        });
+      });
+    }).then(function(res){
+      renderAll();
+      st.textContent='已更新：'+res.meeting;
+      alert('更新完成：'+res.n1+' 匹排位＋'+res.n2+' 列往績（'+res.meeting+'）');
+    }).catch(function(){
+      st.textContent='暫無線上數據，可先用 CSV 匯入';
+    });
+  };
+
+  document.getElementById('btnRaceCsv').onclick=function(){ document.getElementById('fileRaceCsv').click(); };  document.getElementById('fileRaceCsv').addEventListener('change', function(e){
     var f=e.target.files[0]; if(!f) return;
     var rd=new FileReader();
     rd.onload=function(){
