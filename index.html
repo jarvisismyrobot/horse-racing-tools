@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>賽馬分析工具</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>賽馬分析工具</h1>
+    <div class="badges">
+      <span class="tag sample" id="sampleTag" style="display:none">樣本數據</span>
+      <span class="tag local">數據存於本機瀏覽器</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="race">賽事排位</button>
+    <button class="tab" data-tab="horse">馬匹往績</button>
+    <button class="tab" data-tab="value">Value 板</button>
+    <button class="tab" data-tab="money">記賬・資金</button>
+  </nav>
+
+  <section class="panel active" id="p-race">
+    <div class="card">
+      <div class="pills" id="meetPills"></div>
+      <div class="meet" id="meetHead"></div>
+      <div class="pills" id="racePills"></div>
+      <div id="raceBody"></div>
+    </div>
+    <div class="card">
+      <p class="sec" style="margin-top:0">匯入排位表 CSV</p>
+      <p class="racesub">欄位：會議chip,會議標題,會議副題,場次,場次資訊,檔位,馬號,馬名,評分,速度評分,近績,賠率,Fair,信心</p>
+      <div class="btnrow">
+        <button class="btn" id="btnRaceCsv">選擇 CSV 匯入</button>
+        <button class="btn" id="btnRaceTpl">下載範本</button>
+        <input type="file" id="fileRaceCsv" accept=".csv,text/csv">
+      </div>
+      <div class="btnrow" id="sampleCtl" style="display:none">
+        <button class="btn danger" id="btnClearSample">清除樣本數據</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-horse">
+    <div class="chips" id="horseChips"></div>
+    <div id="horseBody"></div>
+    <div class="card">
+      <p class="sec" style="margin-top:0">匯入馬匹往績 CSV</p>
+      <p class="racesub">欄位：馬名,基本資料,騎練組合,速度評分,日期,馬場,途程,場地,名次,時間,負磅,騎師（同一馬名多列＝多場往績）</p>
+      <div class="btnrow">
+        <button class="btn" id="btnHorseCsv">選擇 CSV 匯入</button>
+        <button class="btn" id="btnHorseTpl">下載範本</button>
+        <input type="file" id="fileHorseCsv" accept=".csv,text/csv">
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-value">
+    <div class="note" style="margin:0 0 12px">只顯示「市場賠率 &gt; 應有價值」的馬。冇 value 的大熱門唔會出現喺呢度——呢個就係紀律。</div>
+    <div id="valueBody"></div>
+  </section>
+
+  <section class="panel" id="p-money">
+    <div class="grid3" id="roiCards"></div>
+
+    <p class="sec">新增投注</p>
+    <div class="card">
+      <div class="formgrid">
+        <div class="field"><label>日期</label><input type="date" id="bDate"></div>
+        <div class="field"><label>場次</label><input type="text" id="bRace" placeholder="例：11-01 R3"></div>
+        <div class="field"><label>馬匹</label><input type="text" id="bHorse" placeholder="馬名"></div>
+        <div class="field"><label>種類</label><select id="bType">
+          <option>獨贏</option><option>位置</option><option>連贏</option><option>位置Q</option><option>三重彩</option><option>單T</option><option>孖T</option><option>其他</option>
+        </select></div>
+        <div class="field"><label>賠率</label><input type="number" id="bOdds" step="0.1" min="1" placeholder="例：4.6"></div>
+        <div class="field"><label>注碼 (HK$)</label><input type="number" id="bStake" step="10" min="10" placeholder="例：200"></div>
+        <div class="field"><label>賽果</label><select id="bResult">
+          <option value="pending">待定</option><option value="win">中</option><option value="lose">唔中</option>
+        </select></div>
+        <div class="field"><label>派彩 (HK$，中先填)</label><input type="number" id="bPayout" step="1" min="0" placeholder="例：920"></div>
+      </div>
+      <div class="btnrow"><button class="btn primary" id="btnAddBet">加入記錄</button></div>
+    </div>
+
+    <p class="sec">投注記錄</p>
+    <div class="card scrollx" style="padding:6px 10px"><div id="ledgerBody"></div></div>
+
+    <p class="sec">注碼計算機（Fractional Kelly）</p>
+    <div class="card">
+      <div class="formgrid" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="field"><label>總資金 (HK$)</label><input type="number" id="kBank" value="50000"></div>
+        <div class="field"><label>估算勝率</label><input type="number" id="kProb" step="0.01" value="0.22"></div>
+        <div class="field"><label>賠率</label><input type="number" id="kOdds" step="0.1" value="4.6"></div>
+      </div>
+      <div class="kout" id="kOut"></div>
+      <div class="note">公式：f = (p × 賠率 − 1) ÷ (賠率 − 1)，建議用半 Kelly 落注。p 係你自己估，唔好亂填。</div>
+      <div class="field" style="margin-top:10px;max-width:220px"><label>設定總資金 (HK$)</label><input type="number" id="setBank" step="1000"></div>
+      <div class="btnrow"><button class="btn" id="btnSetBank">儲存資金設定</button></div>
+    </div>
+
+    <p class="sec">備份</p>
+    <div class="card">
+      <div class="btnrow">
+        <button class="btn" id="btnExport">匯出備份 (JSON)</button>
+        <button class="btn" id="btnImport">匯入備份</button>
+        <input type="file" id="fileImport" accept=".json,application/json">
+      </div>
+      <p class="racesub">換手機／清瀏覽器數據前，記得匯出備份。匯入會成個狀態取代。</p>
+    </div>
+  </section>
+
+  <footer>歷史分析唔保證未來回報・投注有風險・只供個人使用<br>v1.0 MVP・數據只存於你的瀏覽器，不會上載</footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
