@@ -12,7 +12,7 @@ function sampleState(){
   return {
     version: 1, bankroll: 50000, sample: true,
     meetings: [{
-      id:'m1', chip:'11-01 跑馬地', title:'跑馬地・2026-11-01（日）', sub:'頭場 13:00 開跑・草地「B」跑道',
+      id:'m1', chip:'11-01 跑馬地', title:'跑馬地・2026-11-01（日）', sub:'頭場 13:00 開跑・草地「B」跑道', sample:true,
       races: [{
         id:'r3', label:'R3', info:'第三場・第四班・1200米',
         runners:[
@@ -28,18 +28,18 @@ function sampleState(){
       }]
     }],
     horses: {
-      '電訊飛彈': {name:'電訊飛彈', info:'5歲・澳洲自購馬・評分 52', tj:'練馬師 蔡約翰／騎師 潘頓（樣本）', speed:98,
+      '電訊飛彈': {name:'電訊飛彈',sample:true, info:'5歲・澳洲自購馬・評分 52', tj:'練馬師 蔡約翰／騎師 潘頓（樣本）', speed:98,
         form:[['10-28','沙田','1200','好地','1/12','1:09.2','126','潘頓'],['10-11','跑馬地','1200','好地','2/12','1:10.1','124','潘頓'],['09-27','沙田','1400','好地','4/14','1:22.8','122','潘頓'],['09-06','跑馬地','1200','黏地','1/12','1:10.8','120','潘頓']]},
-      '包裝旋風': {name:'包裝旋風', info:'4歲・紐西蘭自購馬・評分 54', tj:'練馬師 告東尼／騎師 布文（樣本）', speed:91,
+      '包裝旋風': {name:'包裝旋風',sample:true, info:'4歲・紐西蘭自購馬・評分 54', tj:'練馬師 告東尼／騎師 布文（樣本）', speed:91,
         form:[['10-25','跑馬地','1200','好地','5/12','1:10.5','128','布文'],['10-04','沙田','1200','好地','2/12','1:09.6','126','布文'],['09-20','跑馬地','1650','好地','6/12','1:40.2','124','布文']]},
-      '幸運星辰': {name:'幸運星辰', info:'6歲・香港國際馬匹拍賣會・評分 48', tj:'練馬師 沈集成／騎師 何澤堯（樣本）', speed:88,
+      '幸運星辰': {name:'幸運星辰',sample:true, info:'6歲・香港國際馬匹拍賣會・評分 48', tj:'練馬師 沈集成／騎師 何澤堯（樣本）', speed:88,
         form:[['10-28','沙田','1200','好地','2/12','1:09.4','118','何澤堯'],['10-11','跑馬地','1200','好地','3/12','1:10.3','117','何澤堯'],['09-27','沙田','1200','黏地','4/12','1:10.9','116','何澤堯']]}
     },
     bets: [
-      {id:uid(), date:'2026-10-28', race:'10-28 R6', horse:'電訊飛彈', type:'獨贏', odds:4.6, stake:200, result:'win', payout:920},
-      {id:uid(), date:'2026-10-28', race:'10-28 R6', horse:'幸運星辰', type:'位置', odds:8.0, stake:100, result:'win', payout:290},
-      {id:uid(), date:'2026-10-25', race:'10-25 R4', horse:'包裝旋風', type:'獨贏', odds:3.2, stake:200, result:'lose', payout:0},
-      {id:uid(), date:'2026-10-25', race:'10-25 R8', horse:'龍城飛將', type:'獨贏', odds:2.8, stake:150, result:'lose', payout:0}
+      {id:uid(), sample:true, date:'2026-10-28', race:'10-28 R6', horse:'電訊飛彈', type:'獨贏', odds:4.6, stake:200, result:'win', payout:920},
+      {id:uid(), sample:true, date:'2026-10-28', race:'10-28 R6', horse:'幸運星辰', type:'位置', odds:8.0, stake:100, result:'win', payout:290},
+      {id:uid(), sample:true, date:'2026-10-25', race:'10-25 R4', horse:'包裝旋風', type:'獨贏', odds:3.2, stake:200, result:'lose', payout:0},
+      {id:uid(), sample:true, date:'2026-10-25', race:'10-25 R8', horse:'龍城飛將', type:'獨贏', odds:2.8, stake:150, result:'lose', payout:0}
     ],
     sel: {meet:'m1', race:'r3', horse:'電訊飛彈'}
   };
@@ -53,8 +53,18 @@ function load(){
     var s = JSON.parse(raw);
     if(!s || s.version!==1 || !Array.isArray(s.meetings)) return sampleState();
     s.bets = s.bets||[]; s.horses = s.horses||{}; s.sel = s.sel||{};
+    /* 遷移：舊版 sampleState 冇 sample 標記；S.sample=true 即全份係樣本 */
+    if(s.sample && !s.bets.some(function(b){return b.sample;})){
+      s.bets.forEach(function(b){ b.sample=true; });
+    }
     return s;
   }catch(e){ return sampleState(); }
+}
+function hasSample(){
+  if(S.sample) return true;
+  if(S.bets.some(function(b){return b.sample;})) return true;
+  if(S.meetings.some(function(m){return m.sample;})) return true;
+  return Object.keys(S.horses).some(function(n){return S.horses[n].sample;});
 }
 var S = load();
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} }
@@ -530,7 +540,8 @@ function bind(){
         });
       });
     }).then(function(res){
-      renderAll();
+      S.sample=false; /* 數據已係真實，樣本徽章改由 hasSample() 按殘留樣本投注決定 */
+      save(); renderAll();
       st.textContent='已更新：'+res.meeting;
       alert('更新完成：'+res.n1+' 匹排位＋'+res.n2+' 列往績（'+res.meeting+'）');
     }).catch(function(){
@@ -567,7 +578,13 @@ function bind(){
   var cs=document.getElementById('btnClearSample');
   if(cs) cs.onclick=function(){
     if(!confirm('清除所有樣本數據？（你自己匯入／記錄的數據會保留）')) return;
-    S.meetings=[]; S.horses={}; S.bets=[]; S.sample=false; S.sel={};
+    S.bets=S.bets.filter(function(b){return !b.sample;});
+    S.meetings=S.meetings.filter(function(m){return !m.sample;});
+    Object.keys(S.horses).forEach(function(nm){ if(S.horses[nm].sample) delete S.horses[nm]; });
+    if(S.sel.meet&&!S.meetings.some(function(m){return m.id===S.sel.meet;})) S.sel.meet=null;
+    if(S.sel.race&&!S.meetings.some(function(m){return m.races.some(function(r){return r.id===S.sel.race;});})) S.sel.race=null;
+    if(S.sel.horse&&!S.horses[S.sel.horse]) S.sel.horse='';
+    S.sample=false;
     save(); renderAll();
   };
 }
@@ -584,8 +601,9 @@ function paintKelly(){
 }
 
 function renderAll(){
-  document.getElementById('sampleTag').style.display=S.sample?'':'none';
-  document.getElementById('sampleCtl').style.display=S.sample?'':'none';
+  var hs=hasSample();
+  document.getElementById('sampleTag').style.display=hs?'':'none';
+  document.getElementById('sampleCtl').style.display=hs?'':'none';
   document.getElementById('kBank').value=S.bankroll;
   renderRace(); renderHorse(); renderValue(); renderMoney();
 }
