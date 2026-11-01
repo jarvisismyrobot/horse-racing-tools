@@ -221,7 +221,7 @@ function cdBonus(runner, track, dist){
 }
 function estimateFair(rc, track){
   var distM=/(\d+)\s*米/.exec(rc.info||''), dist=distM?parseInt(distM[1],10):0;
-  var T=14; /* softmax 溫度：經驗值，未經回測校準 */
+  var T=25; /* softmax 溫度：v1校準（2026-11-01十場數據，loglik+合理封頂），數據累積後再調 */
   var items=rc.runners.map(function(r){
     var fp=formPoints(r.form), cd=cdBonus(r, track, dist);
     return {r:r, score:(r.rating||50)+fp+cd.bonus, fp:fp, cd:cd};
@@ -274,7 +274,7 @@ function renderRace(){
   }).join('');
   body.innerHTML='<p class="raceinfo">'+esc(rc.info||rc.label)+'</p>'+
     '<div class="btnrow"><button class="btn" id="btnEstFair">電腦估算 Fair</button>'+
-    '<span class="sub">按評分・近績・同程往績估算，僅供起步參考；撳數字可手改</span></div>'+
+    '<span class="sub">按評分・近績・同程往績估算（v1校準：10場數據，信心已調低）；撳數字可手改</span></div>'+
     '<div class="scrollx"><table class="tbl"><thead><tr><th>檔</th><th>馬號</th><th>馬匹</th><th>賠率</th><th>Fair</th><th>Value</th><th>信心</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     pickHtml(rc);
   document.querySelectorAll('#meetPills .pill').forEach(function(b){
