@@ -2,5 +2,7 @@
  "updated": "2026-10-30T21:07:12",
  "meeting": "11-01 跑馬地",
  "racecard": "racecard-20261101.csv",
- "horses": "horses-20261101.csv"
+ "horses": "horses-20261101.csv",
+ "odds": "odds-20261101.csv",
+ "oddsUpdated": "2026-11-01 12:30"
 }
